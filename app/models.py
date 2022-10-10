@@ -81,6 +81,10 @@ class Shop(models.Model):
     name = models.CharField(max_length=50, verbose_name='Название')
     url = models.URLField(verbose_name='Ссылка', null=True, blank=True)
     state = models.BooleanField(verbose_name='Готовность получения заказов', default=True)
+    user = models.OneToOneField(User, verbose_name='Пользователь',
+                                blank=True, null=True,
+                                on_delete=models.CASCADE)
+    
     # TODO
     # For what purpose???
     # filename = models.FileField()
@@ -124,8 +128,7 @@ class Product(models.Model):
         return self.name                          
 
 class ProductInfo(models.Model):
-    # model
-    name = models.CharField(max_length=80, verbose_name='Название модели', blank=True)
+    model = models.CharField(max_length=80, verbose_name='Название модели', blank=True)
     external_id = models.PositiveIntegerField(verbose_name='Внешний идентификатор')
     product = models.ForeignKey(
         Product, 
@@ -155,6 +158,9 @@ class ProductInfo(models.Model):
                 # Данный набор гарантирует уникальность по набору Продукт-Магазин-Внешний идентификатор
                 fields=['product', 'shop', 'external_id'], name='unique_product_info'),
         ]
+    
+    def __str__(self):
+        return self.model
 
 class Parameter(models.Model):
     name = models.CharField(max_length=40, verbose_name='Название')
@@ -185,6 +191,9 @@ class ProductParameter(models.Model):
                 # 
                 fields=['product_info', 'parameter'], name='unique_product_parameter'),
         ]
+
+    # def __str__(self):
+    #     return self.product_info
 
 class Contact(models.Model):
     user = models.ForeignKey(
