@@ -1,0 +1,276 @@
+# примеры API-запросов
+
+@baseUrl = http://localhost:8000/api/v1
+
+
+###
+# User Registration
+POST {{baseUrl}}/user/register
+Content-Type: application/json
+
+{
+        "first_name": "f_n_user2",
+        "last_name": "l_n_user2",
+        "email": "user5@lo.lo",
+        "password": "1234qwerty5678",
+        "company": "company2",
+        "position": "position2"
+}
+
+###
+# User Register Confirmation
+POST {{baseUrl}}/user/register/confirm
+Content-Type: application/json
+
+{
+        "email": "user5@lo.lo",
+        "token": "435cbf2ea301980cf1cf5a4cc9e9c"
+}
+
+###
+# User logging in to take token
+POST {{baseUrl}}/user/login
+Content-Type: application/json
+
+{
+        "email": "user5@lo.lo",
+        "password": "1234qwerty5678"
+}
+
+###
+# To get User Details
+GET {{baseUrl}}/user/details
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+
+###
+# To change User Details
+POST {{baseUrl}}/user/details
+Content-Type: application/json
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+
+{
+        "first_name": "f_n_user2_changed",
+        "last_name": "l_n_user2_changed",
+        "email": "user5@lo.lo",
+        "password": "1234qwerty5678",
+        "company": "company2_new",
+        "position": "position2_new"
+}
+
+
+###
+# To get User Contacts
+GET {{baseUrl}}/user/contact
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+
+###
+# To set User Contact
+POST {{baseUrl}}/user/contact
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+        "city": "Michurinsk",
+        "street": "Bogholubka",
+        "house": "1",
+        "structure": "1",
+        "building": "1",
+        "apartment": "222",
+        "phone": "8-800-555-35-35"
+}
+
+###
+# To edit User Contact
+PUT {{baseUrl}}/user/contact
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+        "city": "Zavoronezhskoe",
+        "street": "Next to Lesnoy Voronezh"
+}
+
+###
+# To delete User Contact
+DELETE {{baseUrl}}/user/contact
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+  "items" : "3"
+}
+
+
+###
+# Let`s create user for shop use example
+#
+# We will have to change field "type" from "buyer" to "shop" manually
+# by web admin panel
+
+###
+# User Registration
+POST {{baseUrl}}/user/register
+Content-Type: application/json
+
+{
+        "first_name": "f_n_shop1",
+        "last_name": "l_n_shop1",
+        "email": "shop1@lo.lo",
+        "password": "1234qwerty5678",
+        "company": "company1",
+        "position": "position1"
+}
+
+###
+# User Register Confirmation
+POST {{baseUrl}}/user/register/confirm
+Content-Type: application/json
+
+{
+        "email": "shop1@lo.lo",
+        "token": "ba7125c92aa245d3"
+}
+
+# Now you should chande "type" manually
+
+###
+# User logging in to take token
+POST {{baseUrl}}/user/login
+Content-Type: application/json
+
+{
+        "email": "shop1@lo.lo",
+        "password": "1234qwerty5678"
+}
+
+# Now check details via API
+
+###
+# To get User Details
+GET {{baseUrl}}/user/details
+Authorization: Token 4b695df0b47efccfbd4148ef487c7e457167d0ca
+
+#### PARTNERS API ENDPOINTS ####
+###
+# Partner Update
+POST  {{baseUrl}}/partner/update
+Authorization: Token 4b695df0b47efccfbd4148ef487c7e457167d0ca
+Content-Type: application/json
+
+{
+        "url": "https://raw.githubusercontent.com/netology-code/python-final-diplom/master/data/shop1.yaml"
+}
+
+###
+# Check Partner State
+
+GET {{baseUrl}}/partner/state
+Authorization: Token 4b695df0b47efccfbd4148ef487c7e457167d0ca
+
+###
+# Change Partner State
+# True values are y, yes, t, true, on and 1; false values are n, no, f, false, off and 0. 
+# Raises ValueError if val is anything else.
+POST {{baseUrl}}/partner/state
+Authorization: Token 4b695df0b47efccfbd4148ef487c7e457167d0ca
+Content-Type: application/json
+
+{
+        "state": "on"
+}
+
+###
+# Check Partner Orders (except "basket")
+GET  {{baseUrl}}/partner/orders
+Authorization: Token 4b695df0b47efccfbd4148ef487c7e457167d0ca
+
+
+
+# Shop Service
+
+###
+# To find out categories
+GET {{baseUrl}}/categories
+
+###
+# To find ous shops
+GET  {{baseUrl}}/shops
+
+###
+# To find out products infos
+GET {{baseUrl}}/products
+
+#### BASKET API ENDPOINTS ####
+
+# Show Basket Content
+GET {{baseUrl}}/basket
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+
+###
+# Add goods to basket and create basket if not exists
+POST {{baseUrl}}/basket
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+  "items": 
+  [
+        {
+    "product_info": 1,
+    "quantity": 1
+        },
+        {
+    "product_info": 2,
+    "quantity": 2
+        }
+  ] 
+}
+
+###
+# Update added goods in basket
+PUT {{baseUrl}}/basket
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+  "items": 
+  [
+        {
+    "product_info": 1,
+    "quantity": 5
+        },
+        {
+    "product_info": 2,
+    "quantity": 5
+        }
+  ] 
+}
+
+###
+# Delete items from basket by ID
+DELETE {{baseUrl}}/basket
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+        "items": 
+        [
+                1
+        ]
+}
+
+###
+# Check User Orders
+GET {{baseUrl}}/order
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+
+###
+# Place an Order from basket
+POST {{baseUrl}}/order
+Authorization: Token 2f038d38dcce2dc1ac7dc51a2f753278c7b6ed03
+Content-Type: application/json
+
+{
+  "id":"1",
+  "contact" : "2"
+}

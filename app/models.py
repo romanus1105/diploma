@@ -1,15 +1,31 @@
 from django.db import models
-
-from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.utils.translation import gettext_lazy as _
+from django_rest_passwordreset.tokens import get_token_generator
 
-# Create your models here.
+
+USER_TYPE_CHOICES = (
+    ('shop', 'Магазин'),
+    ('buyer', 'Покупатель'),
+)
+
+STATE_CHOICES = (
+    ('basket', 'Статус корзины'),
+    ('new', 'Новый'),
+    ('confirmed', 'Подтвержден'),
+    ('assembled', 'Собран'),
+    ('sent', 'Отправлен'),
+    ('delivered', 'Доставлен'),
+    ('canceled', 'Отменен'),
+)
 
 class UserManager(BaseUserManager):
-
-    # Добавляем методы, по аналогии с django.contrib.auth.models.UserManager
-    # Отличие лишь в том, что в качестве username используется email
-    # и не используем метод with_perm() ???
+    """
+    Миксин для управления пользователями
+    """
+    use_in_migrations = True
 
     def _create_user(self, email, password, **extra_fields):
         """
@@ -31,43 +47,45 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-
+        extra_fields.setdefault('is_active', True)
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
+        if extra_fields.get('is_active') is not True:
+            raise ValueError('Superuser must have is_active=True.')
 
         return self._create_user(email, password, **extra_fields)
 
 class User(AbstractUser):
-
-    USER_TYPE_CHOICES = (
-        ('shop', 'Магазин'),
-        ('buyer', 'Покупатель'),
-        )
-
-    # Переопределяем, т.к. значение по-умолчанию - REQUIRED_FIELDS = ["email"]
+    """
+    Стандартная модель пользователей
+    """
     REQUIRED_FIELDS = []
-    # Переопределяем objects в соответствии с переопределенным выше классом UserManager
     objects = UserManager()
-    # Переопределяем, т.к. значение по-умолчанию - USERNAME_FIELD = "username"
     USERNAME_FIELD = 'email'
-    email = models.EmailField(unique=True)
+    email = models.EmailField(_('email address'), unique=True)
     company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
     position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
+    username_validator = UnicodeUsernameValidator()
+    username = models.CharField(
+        _('username'),
+        max_length=150,
+        help_text=_('Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.'),
+        validators=[username_validator],
+        error_messages={
+            'unique': _("A user with that username already exists."),
+        },
+    )
+    is_active = models.BooleanField(
+        _('active'),
+        default=False,
+        help_text=_(
+            'Designates whether this user should be treated as active. '
+            'Unselect this instead of deleting accounts.'
+        ),
+    )
     type = models.CharField(verbose_name='Тип пользователя', choices=USER_TYPE_CHOICES, max_length=5, default='buyer')
-
-    # В примере переопределено, но непонятно зачем. Наследуемый класс имеет те же значения.
-    # username_validator = UnicodeUsernameValidator()
-    # username = models.CharField(
-    #     _('username'),
-    #     max_length=150,
-    #     help_text=_('Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.'),
-    #     validators=[username_validator],
-    #     error_messages={
-    #         'unique': _("A user with that username already exists."),
-    #     },
-    # )
 
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
@@ -77,17 +95,71 @@ class User(AbstractUser):
         verbose_name_plural = "Список пользователей"
         ordering = ('email',)
 
+class Contact(models.Model):
+    user = models.ForeignKey(User, verbose_name='Пользователь',
+                             related_name='contacts', blank=True,
+                             on_delete=models.CASCADE)
+
+    city = models.CharField(max_length=50, verbose_name='Город')
+    street = models.CharField(max_length=100, verbose_name='Улица')
+    house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
+    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
+    building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
+    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
+    phone = models.CharField(max_length=20, verbose_name='Телефон')
+
+    class Meta:
+        verbose_name = 'Контакты пользователя'
+        verbose_name_plural = "Список контактов пользователя"
+
+    def __str__(self):
+        return f'{self.city} {self.street} {self.house}'
+
+class ConfirmEmailToken(models.Model):
+    class Meta:
+        verbose_name = 'Токен подтверждения Email'
+        verbose_name_plural = 'Токены подтверждения Email'
+
+    @staticmethod
+    def generate_key():
+        """ generates a pseudo random code using os.urandom and binascii.hexlify """
+        return get_token_generator().generate_token()
+
+    user = models.ForeignKey(
+        User,
+        related_name='confirm_email_tokens',
+        on_delete=models.CASCADE,
+        verbose_name=_("The User which is associated to this password reset token")
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("When was this token generated")
+    )
+
+    # Key field, though it is not the primary key of the model
+    key = models.CharField(
+        _("Key"),
+        max_length=64,
+        db_index=True,
+        unique=True
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = self.generate_key()
+        return super(ConfirmEmailToken, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return "Password reset token for user {user}".format(user=self.user)
+
 class Shop(models.Model):
     name = models.CharField(max_length=50, verbose_name='Название')
     url = models.URLField(verbose_name='Ссылка', null=True, blank=True)
-    state = models.BooleanField(verbose_name='Готовность получения заказов', default=True)
     user = models.OneToOneField(User, verbose_name='Пользователь',
                                 blank=True, null=True,
                                 on_delete=models.CASCADE)
-    
-    # TODO
-    # For what purpose???
-    # filename = models.FileField()
+    state = models.BooleanField(verbose_name='статус получения заказов', default=True)
 
     class Meta:
         verbose_name = 'Магазин'
@@ -111,56 +183,34 @@ class Category(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=80, verbose_name='Название')
-    category = models.ForeignKey(
-        Category,
-        verbose_name='Категория', 
-        related_name='products', 
-        blank=True,
-        on_delete=models.CASCADE,
-        )
+    category = models.ForeignKey(Category, verbose_name='Категория', related_name='products', blank=True,
+                                 on_delete=models.CASCADE)
 
     class Meta:
-            verbose_name = 'Продукт'
-            verbose_name_plural = "Список продуктов"
-            ordering = ('-name',)
+        verbose_name = 'Продукт'
+        verbose_name_plural = "Список продуктов"
+        ordering = ('-name',)
 
     def __str__(self):
-        return self.name                          
+        return self.name
 
 class ProductInfo(models.Model):
-    model = models.CharField(max_length=80, verbose_name='Название модели', blank=True)
-    external_id = models.PositiveIntegerField(verbose_name='Внешний идентификатор')
-    product = models.ForeignKey(
-        Product, 
-        verbose_name='Продукт', 
-        related_name='product_infos', 
-        blank=True,
-        on_delete=models.CASCADE,
-        )
-    shop = models.ForeignKey(
-        Shop, 
-        verbose_name='Магазин', 
-        related_name='product_infos', 
-        blank=True,
-        on_delete=models.CASCADE,
-        )
+    model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
+    external_id = models.PositiveIntegerField(verbose_name='Внешний ИД')
+    product = models.ForeignKey(Product, verbose_name='Продукт', related_name='product_infos', blank=True,
+                                on_delete=models.CASCADE)
+    shop = models.ForeignKey(Shop, verbose_name='Магазин', related_name='product_infos', blank=True,
+                             on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(verbose_name='Количество')
     price = models.PositiveIntegerField(verbose_name='Цена')
     price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена')
-    
+
     class Meta:
         verbose_name = 'Информация о продукте'
         verbose_name_plural = "Информационный список о продуктах"
         constraints = [
-            # Создает уникальное ограничение в базе данных.
-            models.UniqueConstraint(
-                # Список имен полей, определяющий уникальный набор столбцов, на которые необходимо наложить ограничение.
-                # Данный набор гарантирует уникальность по набору Продукт-Магазин-Внешний идентификатор
-                fields=['product', 'shop', 'external_id'], name='unique_product_info'),
+            models.UniqueConstraint(fields=['product', 'shop', 'external_id'], name='unique_product_info'),
         ]
-    
-    def __str__(self):
-        return self.model
 
 class Parameter(models.Model):
     name = models.CharField(max_length=40, verbose_name='Название')
@@ -185,50 +235,10 @@ class ProductParameter(models.Model):
         verbose_name = 'Параметр'
         verbose_name_plural = "Список параметров"
         constraints = [
-            # Создает уникальное ограничение в базе данных.
-            models.UniqueConstraint(
-                # Список имен полей, определяющий уникальный набор столбцов, на которые необходимо наложить ограничение.
-                # 
-                fields=['product_info', 'parameter'], name='unique_product_parameter'),
+            models.UniqueConstraint(fields=['product_info', 'parameter'], name='unique_product_parameter'),
         ]
 
-    # def __str__(self):
-    #     return self.product_info
-
-class Contact(models.Model):
-    user = models.ForeignKey(
-        User, 
-        verbose_name='Пользователь',
-        related_name='contacts', 
-        blank=True,
-        on_delete=models.CASCADE
-        )
-    city = models.CharField(max_length=50, verbose_name='Город')
-    street = models.CharField(max_length=100, verbose_name='Улица')
-    house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
-    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
-    building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
-    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
-    phone = models.CharField(max_length=20, verbose_name='Телефон')
-
-    class Meta:
-        verbose_name = 'Контакты пользователя'
-        verbose_name_plural = "Список контактов пользователя"
-
-    def __str__(self):
-        return f'{self.city} {self.street} {self.house}'
-
 class Order(models.Model):
-    
-    STATE_CHOICES = (
-    ('basket', 'Статус корзины'),
-    ('new', 'Новый'),
-    ('confirmed', 'Подтвержден'),
-    ('assembled', 'Собран'),
-    ('sent', 'Отправлен'),
-    ('delivered', 'Доставлен'),
-    ('canceled', 'Отменен'),
-    )
     user = models.ForeignKey(User, verbose_name='Пользователь',
                              related_name='orders', blank=True,
                              on_delete=models.CASCADE)
@@ -259,8 +269,5 @@ class OrderItem(models.Model):
         verbose_name = 'Заказанная позиция'
         verbose_name_plural = "Список заказанных позиций"
         constraints = [
-            # Создает уникальное ограничение в базе данных.
-            models.UniqueConstraint(
-                # Список имен полей, определяющий уникальный набор столбцов, на которые необходимо наложить ограничение.
-                fields=['order_id', 'product_info'], name='unique_order_item'),
+            models.UniqueConstraint(fields=['order_id', 'product_info'], name='unique_order_item'),
         ]
