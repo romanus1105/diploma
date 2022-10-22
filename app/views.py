@@ -1,4 +1,3 @@
-from pprint import pprint
 from django.contrib.auth.password_validation import validate_password
 from django.http import JsonResponse
 from django.contrib.auth import authenticate
@@ -15,7 +14,8 @@ from rest_framework.generics import ListAPIView
 from requests import get
 from yaml import load as load_yaml, Loader
 from distutils.util import strtobool
-from ujson import loads as load_json
+
+from app.tasks import send_email
 
 from app.serializers import (
     UserSerializer, 
@@ -26,7 +26,6 @@ from app.serializers import (
     ContactSerializer,
     OrderItemSerializer
     )
-from app.signals import new_user_registered, new_order
 from app.models import (
     ConfirmEmailToken, 
     Shop,
@@ -38,6 +37,7 @@ from app.models import (
     ProductParameter,
     Order,
     OrderItem,
+    User,
     )
 
 class RegisterAccount(APIView):
@@ -68,7 +68,12 @@ class RegisterAccount(APIView):
                     user = user_serializer.save()
                     user.set_password(request.data['password'])
                     user.save()
-                    new_user_registered.send(sender=self.__class__, user_id=user.id)
+                    #new_user_registered.send(sender=self.__class__, user_id=user.id)
+                    token, _ = ConfirmEmailToken.objects.get_or_create(user_id=user.id)
+                    title = f'Confirmation for {token.user.email}'
+                    message = token.key
+                    email = token.user.email
+                    send_email.delay(title=title, message=message, email=email)
                     return JsonResponse({'Status': True})
                 else:
                     return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
@@ -489,7 +494,12 @@ class OrderView(APIView):
                     return JsonResponse({'Status': False, 'Errors': 'Args are invalid'})
                 else:
                     if is_updated:
-                        new_order.send(sender=self.__class__, user_id=request.user.id)
+                        #new_order.send(sender=self.__class__, user_id=request.user.id)
+                        title = "New order"
+                        message = "New order has been created"
+                        user = User.objects.get(id=request.user.id)
+                        email = user.email
+                        send_email.delay(title=title, message=message, email=email)
                         return JsonResponse({'Status': True})
 
         return JsonResponse({'Status': False, 'Errors': 'Not all necessary arguments are determined'})
